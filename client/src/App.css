@@ -1,0 +1,102 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.connection-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.online {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.offline {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.history-section h2 {
+  margin-bottom: 1rem;
+}
+
+table th {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+table td {
+  font-size: 0.95rem;
+}
+
+.valve-banner {
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.1em;
+}
+
+.valve-banner.open {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+
+.valve-banner.closed {
+  background: rgba(100, 116, 139, 0.1);
+  color: #94a3b8;
+  border: 1px solid #64748b;
+}
+
+.valve-banner.interlock {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  animation: pulse 1s infinite;
+}
+
+.gas-status {
+  font-weight: 700;
+  font-size: 1.8rem;
+}
+
+.gas-status.normal {
+  color: #10b981;
+}
+
+.gas-status.warning {
+  color: #f59e0b;
+}
+
+.gas-status.alarm {
+  color: #ef4444;
+}
+
+.sub-value {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-top: 5px;
+}
+
+.card.highlight {
+  border: 2px solid rgba(96, 165, 250, 0.3);
+}
+
+.safety-note {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-style: italic;
+}
