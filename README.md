@@ -1,4 +1,4 @@
-# Gas Safety PLC Monitoring System (가스 설비 안전 모니터링 시스템) 🛡️
+# Gas Safety PLC Monitoring System (가상환경 가스 설비 안전 모니터링 시스템) 🛡️
 
 현장 가스 설비의 안전을 실시간으로 감시하고, 위험 상황 시 자동 차단(Interlock) 및 이력을 관리하는 통합 모니터링 시스템입니다.
 
