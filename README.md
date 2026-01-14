@@ -1,13 +1,7 @@
 # Gas Safety PLC Monitoring System (가스 설비 안전 모니터링 시스템) 🛡️
 
-### 🔗 [실시간 대시보드 바로가기 (Click Here to View Dashboard)](https://srunaic.github.io/sensor_plc_rasberrypie-/)
-
 현장 가스 설비의 안전을 실시간으로 감시하고, 위험 상황 시 자동 차단(Interlock) 및 이력을 관리하는 통합 모니터링 시스템입니다.
-
 ---
-
-## 🌐 외부 접속 가이드 (본인 PC가 아니어도 확인 가능)
-
 현재 무료버전 서버 이슈로 제 서버 컴터에서 밖에 실행이 안됩니다.
 이 프로젝트는 GitHub Pages를 통해 배포되어 있어, 로컬 환경 브라우저만 있으면 즉시 실행해볼 수 있습니다.
 
