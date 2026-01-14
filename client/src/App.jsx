@@ -14,10 +14,12 @@ function App() {
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    // Use the current window hostname to avoid CORS mismatches (localhost vs 127.0.0.1)
-    const host = window.location.hostname;
-    const backendUrl = `http://${host}:8000`;
-    const wsUrl = `ws://${host}:8000/ws/monitoring`;
+    // Universal connection logic: Detects the host and protocol automatically
+    const isSecure = window.location.protocol === 'https:';
+    const host = window.location.host; // includes port if present
+    const backendUrl = `${window.location.protocol}//${host}`;
+    const wsProtocol = isSecure ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${host}/ws/monitoring`;
 
     // WebSocket Connection
     const ws = new WebSocket(wsUrl)
