@@ -1,37 +1,40 @@
-# Gas Safety PLC Monitoring System (가상환경 가스 설비 안전 모니터링 시스템) 🛡️
+# Gas Safety PLC Monitoring System (가스 설비 안전 모니터링 시스템) 🛡️
+
+### 🔗 [실시간 대시보드 바로가기 (Click Here to View Dashboard)](https://srunaic.github.io/sensor_plc_rasberrypie-/)
 
 현장 가스 설비의 안전을 실시간으로 감시하고, 위험 상황 시 자동 차단(Interlock) 및 이력을 관리하는 통합 모니터링 시스템입니다.
 
 ---
 
-## 🚀 Key Features (주요 기능)
+## 🌐 외부 접속 가이드 (본인 PC가 아니어도 확인 가능)
 
-### 1. Gas Safety Simulation (가스 안전 시뮬레이션)
-- **Realistic Data Generation**: 5 PPM 내외의 안정적인 평상시 상태와 1% 확률로 발생하는 가스 누출(Leak) 시나리오 시뮬레이션.
-- **Auto-Interlock Logic**: 가스 농도가 40 PPM을 초과하면 **Interlock Valve 즉시 차단** (Status: FAULT).
-- **Recovery Cycle**: 가스 안정화 후 15초(현장 리셋 가정) 뒤 자동으로 **NORMAL** 상태 복구 프로세스.
+이 프로젝트는 GitHub Pages를 통해 배포되어 있어, 어디서든 브라우저만 있으면 즉시 실행해볼 수 있습니다.
 
-### 2. Edge & Backend Architecture
-- **Edge Collector**: 라즈베리파이 역할을 하며 Modbus-TCP로 PLC 데이터를 폴링하고 서버로 전송.
-- **Real-time Synchronization**: WebSockets 기반 실시간 데이터 브로드캐스팅.
-- **Unified Server**: FastAPI가 백엔드 API와 정적 프론트엔드 파일을 동시에 서빙하는 최적화된 구조.
+### 1. 웹 대시보드 접속 (정적 UI)
+👉 **[https://srunaic.github.io/sensor_plc_rasberrypie-/](https://srunaic.github.io/sensor_plc_rasberrypie-/)**
+- 이 링크를 클릭하면 즉시 대시보드 화면으로 이동합니다.
+- 내 컴퓨터가 아닌 다른 PC나 모바일에서도 동일하게 확인 가능합니다.
 
-### 3. Safety-First Web UI
-- **Emergency Banner**: 알람 발생 시 상단에 고정되는 붉은색 경고 사이렌 배너.
-- **State-First UX**: 수치보다 상태(NORMAL/ALARM)를 명확하게 시각화.
-- **No-Control Policy**: 보안을 위해 제어 기능을 배제한 읽기 전용 모니터링 대시보드.
+### 2. 실시간 가스 데이터 연동 (다른 PC에서 데이터 보기)
+만약 다른 사람에게 **내 PC의 실시간 가스 변동 수치**를 보여주고 싶다면 아래 명령어를 내 컴퓨터에서 실행하세요:
+```bash
+npx cloudflared tunnel --url http://localhost:8000
+```
+- 실행 후 생성되는 `https://*.trycloudflare.com` 주소를 공유하면, 전 세계 어디서든 유저님 PC의 실시간 가스 상태를 모니터링할 수 있습니다!
 
 ---
 
-## 🛡️ Technical Resolution Log (문제 해결 이력)
+## 🛠 주요 문제 해결 및 구현 항목
 
-1. **CORS & Dynamic Host**: 다양한 환경(localhost, IP 등)에서 통신 거부 문제를 `window.location.host` 동적 감지 로직으로 해결.
-2. **Schema Integrity**: 가스 데이터 필드 추가에 따른 DB 충돌을 스키마 초기화 로직 보강으로 해결.
-3. **Frontend Stability**: 데이터 수집 전 `null` 값에 의한 `toFixed` 런타임 에러를 Optional Chaining으로 방어.
-4. **Deployment Optimization**: Cloudflare Build 경로 충돌 이슈를 Unified Architecture(단일 서버 통합) 전환으로 극복.
+1. **GitHub Pages 자동 배포**: 프론트엔드 경로 오류를 해결하여 클릭 한 번으로 접속 가능한 환경 구축.
+2. **CORS & WebSocket**: 어떤 외부 접속 주소에서도 백엔드와 안전하게 통신할 수 있도록 설계.
+3. **가스 인터락 로직**: 40 PPM 초과 시 즉시 차단(FAULT) 및 안정화 후 15초 자동 복구 시나리오 구현.
+4. **통합 대시보드**: 가스 농도 시각화, 밸브 상태 사이렌 배너, 영구 기록용 SQLite DB 연동.
 
-## ✅ Final Verification Result
-- [x] 가스 알람 발생 시 즉각적인 밸브 차단 확인
-- [x] 안정화 후 15초 카운트다운 및 자동 복구 확인
-- [x] 모든 이벤트의 SQLite DB 영구 기록 성공
-- [x] 단일 포트(8000) 통합 서비스 안정성 검증 완료
+---
+
+## ✅ 개발 최종 검증 완료
+- [x] 가스 누출 시 밸브 자동 차단 및 빨간색 경고 배너 표출 성공
+- [x] 수치 안정화 후 15초 카운트다운 및 자동 정상화 프로세스 검증
+- [x] 모든 센서 수치 및 상태 변화의 SQLite DB 영구 기록 확인
+- [x] GitHub Pages를 통한 외부 접속 및 UI 실행 안정성 확인
