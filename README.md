@@ -30,22 +30,6 @@
 3. **Frontend Stability**: 데이터 수집 전 `null` 값에 의한 `toFixed` 런타임 에러를 Optional Chaining으로 방어.
 4. **Deployment Optimization**: Cloudflare Build 경로 충돌 이슈를 Unified Architecture(단일 서버 통합) 전환으로 극복.
 
----
-
-## 🌐 External Access (외부 접속 가이드)
-
-### 1. Static Layout (UI 확인용)
-👉 [https://sensor-plc-rasberrypie.pages.dev/](https://sensor-plc-rasberrypie.pages.dev/)
-
-### 2. Live Tunnel (실시간 데이터 연동용)
-외부 PC에서 현재 로컬의 실시간 데이터를 확인하려면 **Cloudflare Tunnel** 사용을 추천합니다:
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-생성된 `https://*.trycloudflare.com` 주소를 통해 전 세계 어디서나 접속 가능합니다.
-
----
-
 ## ✅ Final Verification Result
 - [x] 가스 알람 발생 시 즉각적인 밸브 차단 확인
 - [x] 안정화 후 15초 카운트다운 및 자동 복구 확인
