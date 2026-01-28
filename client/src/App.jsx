@@ -14,12 +14,11 @@ function App() {
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    // Universal connection logic: Detects the host and protocol automatically
-    const isSecure = window.location.protocol === 'https:';
-    const host = window.location.host; // includes port if present
-    const backendUrl = `${window.location.protocol}//${host}`;
-    const wsProtocol = isSecure ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${host}/ws/monitoring`;
+    // Cloudflare Worker URL (Replace with your actual worker URL after deployment)
+    const workerUrl = "sensor-plc-backend.YOUR_SUBDOMAIN.workers.dev";
+
+    const backendUrl = `https://${workerUrl}`;
+    const wsUrl = `wss://${workerUrl}/ws/monitoring`;
 
     // WebSocket Connection
     const ws = new WebSocket(wsUrl)

@@ -1,122 +1,69 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import List
+from js import Response, WebSocketPair, JSON
 import json
-import sqlite3
-import os
+from datetime import datetime
 
-app = FastAPI()
+async def on_fetch(request, env):
+    # CORS Headers
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    if request.method == "OPTIONS":
+        return Response.new("", headers=cors_headers)
 
-# Database Setup
-DB_PATH = os.path.join(os.path.dirname(__file__), 'sensor_history.db')
+    url = request.url
+    path = "/" + "/".join(url.split("/")[3:])
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sensor_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status INTEGER,
-            temperature REAL,
-            pressure REAL,
-            speed INTEGER,
-            gas_concentration REAL,
-            valve_status INTEGER,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    # API: Get History
+    if path == "/api/history":
+        try:
+            # Query from D1
+            result = await env.DB.prepare("SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 50").all()
+            return Response.new(json.dumps(result.results), headers={**cors_headers, "Content-Type": "application/json"})
+        except Exception as e:
+            return Response.new(json.dumps({"error": str(e)}), status=500, headers=cors_headers)
 
-init_db()
+    # API: Receive Sensor Data
+    if path == "/api/sensor-data" and request.method == "POST":
+        try:
+            data = await request.json()
+            # Insert into D1
+            await env.DB.prepare(
+                "INSERT INTO sensor_data (status, temperature, pressure, speed, gas_concentration, valve_status) VALUES (?, ?, ?, ?, ?, ?)"
+            ).bind(
+                data.get("status"),
+                data.get("temperature"),
+                data.get("pressure"),
+                data.get("speed"),
+                data.get("gas_concentration"),
+                data.get("valve_status")
+            ).run()
+            
+            # Broadcast is handled by returning a signal or using Durable Objects
+            # For simplicity in basic Workers, we just save to DB. 
+            # Real-time updates ideally use Durable Objects for WebSocket broadcasting.
+            return Response.new(json.dumps({"status": "success"}), headers=cors_headers)
+        except Exception as e:
+            return Response.new(json.dumps({"error": str(e)}), status=500, headers=cors_headers)
 
-# Data Model
-class SensorData(BaseModel):
-    status: int
-    temperature: float
-    pressure: float
-    speed: int
-    gas_concentration: float
-    valve_status: int
+    # WebSocket: Monitoring
+    if path == "/ws/monitoring":
+        upgrade_header = request.headers.get("Upgrade")
+        if upgrade_header != "websocket":
+            return Response.new("Expected Upgrade: websocket", status=426)
 
-# WebSocket Manager
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        pair = WebSocketPair.new()
+        client = pair.get(0)
+        server = pair.get(1)
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+        await server.accept()
+        
+        # Note: Worker-to-Worker/Client broadcast usually requires Durable Objects.
+        # This basic socket will stay open but won't receive broadcasts unless 
+        # implemented with DO or a Pub/Sub mechanism.
+        
+        return Response.new(None, status=101, web_socket=client)
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except:
-                pass
-
-manager = ConnectionManager()
-
-@app.post("/api/sensor-data")
-async def receive_sensor_data(data: SensorData):
-    # Log to DB
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO sensor_data (status, temperature, pressure, speed, gas_concentration, valve_status)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (data.status, data.temperature, data.pressure, data.speed, data.gas_concentration, data.valve_status))
-    conn.commit()
-    conn.close()
-    
-    # Broadcast to Web UI
-    await manager.broadcast(data.model_dump_json())
-    return {"status": "success"}
-
-@app.get("/api/history")
-async def get_history(limit: int = 50):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT ?', (limit,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.websocket("/ws/monitoring")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text() # Keep connection alive
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-# Serve Frontend Static Files
-# Note: In production/virtual-server, build files are in ../client/dist
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "client", "dist")
-if os.path.exists(STATIC_DIR):
-    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
-else:
-    @app.get("/")
-    async def root_placeholder():
-        return {"message": "Server running. Please run 'npm run build' in the client directory to serve the UI."}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    return Response.new("Not Found", status=404, headers=cors_headers)

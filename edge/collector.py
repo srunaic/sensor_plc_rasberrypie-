@@ -3,7 +3,7 @@ import requests
 from pyModbusTCP.client import ModbusClient
 
 class EdgeCollector:
-    def __init__(self, plc_host='127.0.0.1', plc_port=502, api_url='http://127.0.0.1:8000/api/sensor-data'):
+    def __init__(self, plc_host='127.0.0.1', plc_port=502, api_url='https://sensor-plc-backend.YOUR_SUBDOMAIN.workers.dev/api/sensor-data'):
         self.client = ModbusClient(host=plc_host, port=plc_port, auto_open=True, auto_close=True)
         self.api_url = api_url
         self.last_status = None
