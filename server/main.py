@@ -1,8 +1,7 @@
-from js import Response, WebSocketPair
+from js import Response, WebSocketPair, fetch, JSON, Object
 import json
 
 async def on_fetch(request, env, ctx):
-    # Base CORS headers for all responses
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -12,83 +11,97 @@ async def on_fetch(request, env, ctx):
     if request.method == "OPTIONS":
         return Response.new("", headers=cors_headers)
 
+    # Supabase Credentials from env
+    supabase_url = env.SUPABASE_URL
+    supabase_key = getattr(env, "SUPABASE_KEY", "REPLACE_WITH_YOUR_ANON_KEY")
+
+    supabase_headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
+
     try:
         url = request.url
-        # Strip domain and extract path safely
-        path_full = "/" + "/".join(url.split("/")[3:])
-        path = path_full.split("?")[0] # remove query strings
+        path_segments = url.split("/")
+        path = "/" + "/".join(path_segments[3:]) if len(path_segments) > 3 else "/"
+        path = path.split("?")[0]
 
         # 1. Health Check
         if path == "/" or path == "/api/ping":
             return Response.new(
-                json.dumps({"status": "running", "msg": "Sensor PLC Backend is active"}), 
+                json.dumps({"status": "running", "msg": "Sensor PLC Backend (Supabase) is active"}), 
                 status=200, 
                 headers={**cors_headers, "Content-Type": "application/json"}
             )
 
-        # 2. History (Database Read)
+        # 2. History (Read from Supabase)
         if path == "/api/history":
             try:
-                # result = await env.DB.prepare(...).all()
-                # In Python Worker, results is an object that mirrors JS result.
-                query = await env.DB.prepare("SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 50").all()
+                # Query Supabase REST API
+                # GET /rest/v1/sensor_data?select=*&order=timestamp.desc&limit=50
+                api_url = f"{supabase_url}/rest/v1/sensor_data?select=*&order=timestamp.desc&limit=50"
                 
-                # Careful conversion of results to Python list
-                results_list = []
-                if query and hasattr(query, 'results'):
-                    for i in range(len(query.results)):
-                        results_list.append(query.results[i])
+                resp = await fetch(api_url, method="GET", headers=supabase_headers)
+                data = await resp.json()
                 
                 return Response.new(
-                    json.dumps(results_list), 
+                    JSON.stringify(data), 
                     headers={**cors_headers, "Content-Type": "application/json"}
                 )
             except Exception as e:
                 return Response.new(
-                    json.dumps({"error": f"D1 Error: {str(e)}"}), 
+                    json.dumps({"error": f"Supabase Fetch Error: {str(e)}"}), 
                     status=500, 
                     headers=cors_headers
                 )
 
-        # 3. Receive Sensor Data (Database Write)
+        # 3. Receive Sensor Data (Write to Supabase)
         if path == "/api/sensor-data" and request.method == "POST":
             try:
                 data = await request.json()
-                await env.DB.prepare(
-                    "INSERT INTO sensor_data (status, temperature, pressure, speed, gas_concentration, valve_status) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(
-                    data.get("status", 0),
-                    data.get("temperature", 0.0),
-                    data.get("pressure", 0.0),
-                    data.get("speed", 0),
-                    data.get("gas_concentration", 0.0),
-                    data.get("valve_status", 1)
-                ).run()
+                # POST /rest/v1/sensor_data
+                api_url = f"{supabase_url}/rest/v1/sensor_data"
+                
+                payload = json.dumps({
+                    "status": data.get("status", 0),
+                    "temperature": data.get("temperature", 0.0),
+                    "pressure": data.get("pressure", 0.0),
+                    "speed": data.get("speed", 0),
+                    "gas_concentration": data.get("gas_concentration", 0.0),
+                    "valve_status": data.get("valve_status", 1)
+                })
+
+                resp = await fetch(api_url, method="POST", headers=supabase_headers, body=payload)
+                
+                if resp.status >= 400:
+                    err_text = await resp.text()
+                    return Response.new(json.dumps({"error": f"Supabase Insert Failed: {err_text}"}), status=500, headers=cors_headers)
+
                 return Response.new(json.dumps({"status": "success"}), headers=cors_headers)
             except Exception as e:
-                return Response.new(json.dumps({"error": str(e)}), status=500, headers=cors_headers)
+                return Response.new(json.dumps({"error": f"Internal Error: {str(e)}"}), status=500, headers=cors_headers)
 
-        # 4. WebSocket: Monitoring
+        # 4. WebSocket: Monitoring Proxy
         if path == "/ws/monitoring":
             if request.headers.get("Upgrade") != "websocket":
                 return Response.new("Expected Upgrade: websocket", status=426, headers=cors_headers)
 
             pair = WebSocketPair.new()
-            # Standard access for Python binding
             client = pair.get(0)
             server = pair.get(1)
 
             await server.accept()
-            # Connection accepted. Note: Python Workers keep sockets open but 
-            # cloud-wide broadcast requires Durable Objects.
+            # Note: Real-time broadcast still ideally needs Durable Objects or Supabase Realtime
+            # For now, this just maintains the connection status for the UI.
             return Response.new(None, status=101, web_socket=client)
 
         return Response.new(json.dumps({"error": "not found", "path": path}), status=404, headers=cors_headers)
 
     except Exception as e:
-        # Ultimate fallback to avoid 1101
         return Response.new(
-            json.dumps({"error": "Worker crashed", "details": str(e)}), 
+            json.dumps({"error": "Worker Exception", "details": str(e)}), 
             status=500, 
             headers={**cors_headers, "Content-Type": "application/json"}
         )
