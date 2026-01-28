@@ -18,8 +18,23 @@ function App() {
   })
   const [history, setHistory] = useState([])
   const [connected, setConnected] = useState(false)
+  const [sharingEnabled, setSharingEnabled] = useState(true)
 
   useEffect(() => {
+    // 0. Fetch Sharing Status
+    const fetchSettings = async () => {
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', 'data_sharing_enabled')
+        .single()
+
+      if (settings) {
+        setSharingEnabled(settings.value === 'true')
+      }
+    }
+    fetchSettings()
+
     // 1. Initial Data & History Fetch
     const fetchInitialData = async () => {
       try {
@@ -100,10 +115,27 @@ function App() {
     }
   }
 
+  const toggleSharing = async () => {
+    const newValue = !sharingEnabled
+    setSharingEnabled(newValue)
+    await supabase
+      .from('system_settings')
+      .upsert({ key: 'data_sharing_enabled', value: String(newValue) })
+  }
+
+  //Online Status
   return (
     <div className="container">
       <header className="header">
-        <h1>GAS FACILITY SAFETY MONITORING</h1>
+        <div className="header-left">
+          <h1>GAS FACILITY SAFETY MONITORING</h1>
+          <button
+            className={`sharing-toggle ${sharingEnabled ? 'on' : 'off'}`}
+            onClick={toggleSharing}
+          >
+            DB Sharing: {sharingEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
         <div className={`connection-status ${connected ? 'online' : 'offline'}`}>
           {connected ? '● LIVE (SUPABASE)' : '○ CONNECTING...'}
         </div>

@@ -53,13 +53,30 @@ class EdgeCollector:
         except Exception as e:
             print(f"Error connecting to Supabase: {e}")
 
+    def check_sharing_status(self):
+        try:
+            # GET /rest/v1/system_settings?key=eq.data_sharing_enabled&select=value
+            url = f"{self.supabase_url}/rest/v1/system_settings?key=eq.data_sharing_enabled&select=value"
+            resp = requests.get(url, headers=self.headers, timeout=3)
+            if resp.status_code == 200:
+                settings = resp.json()
+                if settings and len(settings) > 0:
+                    return settings[0]['value'] == 'true'
+            return True # Default to True if setting missing
+        except:
+            return True
+
     def run(self):
         print(f"Edge Collector started. Connecting to Supabase...")
         while True:
-            data = self.read_plc_data()
-            if data:
-                self.send_to_cloud(data)
-            time.sleep(2) # 2-second interval
+            # Check if sharing is enabled before reading/sending
+            if self.check_sharing_status():
+                data = self.read_plc_data()
+                if data:
+                    self.send_to_cloud(data)
+            else:
+                print("Data sharing is DISABLED by Dashboard. Waiting...")
+            time.sleep(2)
 
 if __name__ == "__main__":
     collector = EdgeCollector()
