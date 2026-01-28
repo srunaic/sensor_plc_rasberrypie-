@@ -15,7 +15,7 @@ function App() {
 
   useEffect(() => {
     // Cloudflare Worker URL (Replace with your actual worker URL after deployment)
-    const workerUrl = "sensor-plc-backend.YOUR_SUBDOMAIN.workers.dev";
+    const workerUrl = "sensor-plc-backend.victoryka123.workers.dev";
 
     const backendUrl = `https://${workerUrl}`;
     const wsUrl = `wss://${workerUrl}/ws/monitoring`;
