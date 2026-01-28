@@ -1,47 +1,66 @@
 import time
 import requests
+import json
 from pyModbusTCP.client import ModbusClient
 
 class EdgeCollector:
-    def __init__(self, plc_host='127.0.0.1', plc_port=502, api_url='https://sensor-plc-backend.victoryka123.workers.dev/api/sensor-data'):
+    def __init__(self, plc_host='127.0.0.1', plc_port=502):
         self.client = ModbusClient(host=plc_host, port=plc_port, auto_open=True, auto_close=True)
-        self.api_url = api_url
+        # Supabase Configuration
+        self.supabase_url = 'https://wjqtxvtlqswwxqdciuwm.supabase.co'
+        self.supabase_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqcXR4dnRscXN3d3hxZGNpdXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NzUxOTksImV4cCI6MjA4NTE1MTE5OX0.wjn1aDedu1CCxZWKg8lpxclrvPqGFWIPmc5hDIZuO6g'
+        self.api_url = f"{self.supabase_url}/rest/v1/sensor_data"
+        self.headers = {
+            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {self.supabase_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        }
         self.last_status = None
 
-    def collect_and_push(self):
-        print(f"Connecting to PLC at {self.client.host}...")
+    def read_plc_data(self):
+        # 1. Read Basic Status (Discrete Inputs)
+        # 0: Stopped, 1: Running, 2: Fault
+        regs = self.client.read_holding_registers(0, 10)
+        if not regs:
+            return None
+
+        # Data mapping:
+        # Register 0: System Status
+        # Register 1: Temperature (Value * 0.01)
+        # Register 2: Pressure (Value * 0.01)
+        # Register 3: Speed
+        # Register 4: Gas Concentration (PPM)
+        # Register 5: Valve Status (0: Closed, 1: Open, 2: Interlock)
+        
+        data = {
+            "status": regs[0],
+            "temperature": regs[1] / 100.0,
+            "pressure": regs[2] / 100.0,
+            "speed": regs[3],
+            "gas_concentration": regs[4] / 1.0, # PPM
+            "valve_status": regs[5]
+        }
+        return data
+
+    def send_to_cloud(self, data):
         try:
-            while True:
-                # Read 6 registers starting from address 0
-                regs = self.client.read_holding_registers(0, 6)
-                if regs:
-                    status, temp_raw, press_raw, speed, gas_raw, valve = regs
-                    
-                    data = {
-                        "status": status,
-                        "temperature": temp_raw / 100.0,
-                        "pressure": press_raw / 100.0,
-                        "speed": speed,
-                        "gas_concentration": gas_raw / 100.0,
-                        "valve_status": valve,
-                        "timestamp": time.time()
-                    }
-                    
-                    print(f"Collected: {data}")
-                    
-                    # Push to Backend API
-                    try:
-                        response = requests.post(self.api_url, json=data, timeout=2)
-                        print(f"Push Status: {response.status_code}")
-                    except Exception as e:
-                        print(f"API Push Error: {e}")
-                else:
-                    print("PLC Read Error")
-                
-                time.sleep(2)  # 2-second interval
-        except KeyboardInterrupt:
-            print("Edge Collector Stopped")
+            response = requests.post(self.api_url, headers=self.headers, json=data, timeout=5)
+            if response.status_code >= 400:
+                print(f"Cloud upload failed: {response.text}")
+            else:
+                print(f"Data pushed to Supabase: Gas {data['gas_concentration']} PPM, Valve {data['valve_status']}")
+        except Exception as e:
+            print(f"Error connecting to Supabase: {e}")
+
+    def run(self):
+        print(f"Edge Collector started. Connecting to Supabase...")
+        while True:
+            data = self.read_plc_data()
+            if data:
+                self.send_to_cloud(data)
+            time.sleep(2) # 2-second interval
 
 if __name__ == "__main__":
     collector = EdgeCollector()
-    collector.collect_and_push()
+    collector.run()

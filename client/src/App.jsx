@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import './App.css'
+
+// Supabase Configuration
+const supabaseUrl = 'https://wjqtxvtlqswwxqdciuwm.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqcXR4dnRscXN3d3hxZGNpdXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NzUxOTksImV4cCI6MjA4NTE1MTE5OX0.wjn1aDedu1CCxZWKg8lpxclrvPqGFWIPmc5hDIZuO6g'
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 function App() {
   const [data, setData] = useState({
@@ -8,43 +14,68 @@ function App() {
     pressure: 0,
     speed: 0,
     gas_concentration: 0,
-    valve_status: 1 // OPEN by default
+    valve_status: 1
   })
   const [history, setHistory] = useState([])
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    // Cloudflare Worker URL (Replace with your actual worker URL after deployment)
-    const workerUrl = "sensor-plc-backend.victoryka123.workers.dev";
+    // 1. Initial Data & History Fetch
+    const fetchInitialData = async () => {
+      try {
+        const { data: latestData, error: latestError } = await supabase
+          .from('sensor_data')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(1)
 
-    const backendUrl = `https://${workerUrl}`;
-    const wsUrl = `wss://${workerUrl}/ws/monitoring`;
+        if (latestData && latestData.length > 0) {
+          setData(latestData[0])
+          setConnected(true)
+        }
 
-    // WebSocket Connection
-    const ws = new WebSocket(wsUrl)
+        const { data: historyData, error: historyError } = await supabase
+          .from('sensor_data')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(50)
 
-    ws.onopen = () => {
-      setConnected(true)
-      console.log('WebSocket Connected')
+        if (historyData) {
+          setHistory(historyData)
+        }
+      } catch (err) {
+        console.error('Error fetching initial data:', err)
+        setConnected(false)
+      }
     }
 
-    ws.onmessage = (event) => {
-      const newData = JSON.parse(event.data)
-      setData(newData)
+    fetchInitialData()
+
+    // 2. Realtime Subscription
+    const channel = supabase
+      .channel('sensor_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sensor_data' },
+        (payload) => {
+          console.log('Realtime Update:', payload.new)
+          setData(payload.new)
+          setHistory(prev => [payload.new, ...prev].slice(0, 50))
+          setConnected(true)
+        }
+      )
+      .subscribe((status) => {
+        console.log('Subscription status:', status)
+        if (status === 'SUBSCRIBED') {
+          setConnected(true)
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setConnected(false)
+        }
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
     }
-
-    ws.onclose = () => {
-      setConnected(false)
-      console.log('WebSocket Disconnected')
-    }
-
-    // Fetch History
-    fetch(`${backendUrl}/api/history`)
-      .then(res => res.json())
-      .then(json => setHistory(json))
-      .catch(err => console.error("Initial fetch failed:", err))
-
-    return () => ws.close()
   }, [])
 
   const getStatusText = (s) => {
@@ -61,7 +92,6 @@ function App() {
     return <span className="gas-status normal">✅ NORMAL</span>
   }
 
-  //#region PLC Status Interlock safe value 
   const getValveStatus = (v) => {
     switch (v) {
       case 1: return <div className="valve-banner open">VALVE STATUS: OPEN</div>
@@ -69,15 +99,13 @@ function App() {
       default: return <div className="valve-banner closed">VALVE STATUS: CLOSED</div>
     }
   }
-  //#endregion
 
-  //Online Status
   return (
     <div className="container">
       <header className="header">
         <h1>GAS FACILITY SAFETY MONITORING</h1>
         <div className={`connection-status ${connected ? 'online' : 'offline'}`}>
-          {connected ? '● SERVER ONLINE' : '○ SERVER OFFLINE'}
+          {connected ? '● LIVE (SUPABASE)' : '○ CONNECTING...'}
         </div>
       </header>
 
@@ -129,9 +157,9 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {history.slice(0, 10).map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '1rem', color: '#64748b' }}>{row.timestamp}</td>
+              {history.map((row, i) => (
+                <tr key={row.id || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '1rem', color: '#64748b' }}>{new Date(row.timestamp).toLocaleString()}</td>
                   <td style={{ padding: '1rem' }}>
                     {row.valve_status === 2 ? <span style={{ color: '#ef4444' }}>GAS_INTERLOCK</span> : row.gas_concentration > 20 ? 'GAS_WARNING' : 'SYSTEM_LOG'}
                   </td>
