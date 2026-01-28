@@ -5,7 +5,7 @@
 이 프로젝트는 산업 현장의 가스 안전을 실시간으로 모니터링하고 가스 누출 시 자동으로 밸브를 차단하는 **클라우드 네이티브 안전 시스템**입니다.
 
 ## 🏗️ System Architecture
-중간 서버 없이 에지(Edge)와 클라우드 데이터베이스가 직접 통신하는 **Serverless Architecture**를 채택하였습니다.
+ 에지(Edge)와 클라우드 서버 데이터베이스가 직접 통신하는 **Serverless Architecture**를 채택하였습니다.
 
 - **Frontend**: [Cloudflare Pages](https://sensor-plc-rasberrypie.pages.dev/) (React + Vite)
 - **Database**: [Supabase](https://supabase.com/) (PostgreSQL)
