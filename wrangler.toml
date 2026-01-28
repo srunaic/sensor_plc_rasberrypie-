@@ -1,6 +1,6 @@
 name = "sensor-plc-backend"
 main = "server/main.py"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-12-30"
 compatibility_flags = [ "python_workers" ]
 
 [[d1_databases]]

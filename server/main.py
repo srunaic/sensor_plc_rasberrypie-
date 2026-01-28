@@ -1,7 +1,7 @@
 from js import Response, WebSocketPair
 import json
 
-async def on_fetch(request, env):
+async def on_fetch(request, env, ctx):
     # Base CORS headers for all responses
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
@@ -14,54 +14,46 @@ async def on_fetch(request, env):
 
     try:
         url = request.url
-        # Safer path parsing
-        from urllib.parse import urlparse
-        parsed_url = urlparse(url)
-        path = parsed_url.path
-        if not path:
-            path = "/"
+        # Strip domain and extract path safely
+        path_full = "/" + "/".join(url.split("/")[3:])
+        path = path_full.split("?")[0] # remove query strings
 
-        # 1. Root / Health Check
+        # 1. Health Check
         if path == "/" or path == "/api/ping":
             return Response.new(
-                json.dumps({"message": "Sensor PLC Backend is running", "path": path}), 
+                json.dumps({"status": "running", "msg": "Sensor PLC Backend is active"}), 
                 status=200, 
                 headers={**cors_headers, "Content-Type": "application/json"}
             )
 
-        # 2. History
-        if path == "/api/history" or path == "/history":
+        # 2. History (Database Read)
+        if path == "/api/history":
             try:
-                if not hasattr(env, "DB"):
-                    return Response.new(json.dumps({"error": "D1 DB binding 'DB' not found"}), status=500, headers=cors_headers)
-                
+                # result = await env.DB.prepare(...).all()
+                # In Python Worker, results is an object that mirrors JS result.
                 query = await env.DB.prepare("SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 50").all()
                 
-                # Convert results to a serializable list
-                data_list = []
-                if hasattr(query, "results") and query.results:
-                    # In some versions, results might need to be converted from JS to Python
-                    # But usually it's already a list of dicts.
-                    for row in query.results:
-                        data_list.append(dict(row))
+                # Careful conversion of results to Python list
+                results_list = []
+                if query and hasattr(query, 'results'):
+                    for i in range(len(query.results)):
+                        results_list.append(query.results[i])
                 
                 return Response.new(
-                    json.dumps(data_list), 
+                    json.dumps(results_list), 
                     headers={**cors_headers, "Content-Type": "application/json"}
                 )
             except Exception as e:
                 return Response.new(
-                    json.dumps({"error": f"D1 Query Failed: {str(e)}"}), 
+                    json.dumps({"error": f"D1 Error: {str(e)}"}), 
                     status=500, 
-                    headers={**cors_headers, "Content-Type": "application/json"}
+                    headers=cors_headers
                 )
 
-        # 3. Receive Sensor Data
-        if (path == "/api/sensor-data" or path == "/sensor-data") and request.method == "POST":
+        # 3. Receive Sensor Data (Database Write)
+        if path == "/api/sensor-data" and request.method == "POST":
             try:
-                body = await request.text()
-                data = json.loads(body)
-                
+                data = await request.json()
                 await env.DB.prepare(
                     "INSERT INTO sensor_data (status, temperature, pressure, speed, gas_concentration, valve_status) VALUES (?, ?, ?, ?, ?, ?)"
                 ).bind(
@@ -72,34 +64,31 @@ async def on_fetch(request, env):
                     data.get("gas_concentration", 0.0),
                     data.get("valve_status", 1)
                 ).run()
-                
                 return Response.new(json.dumps({"status": "success"}), headers=cors_headers)
             except Exception as e:
                 return Response.new(json.dumps({"error": str(e)}), status=500, headers=cors_headers)
 
-        # 4. WebSocket
+        # 4. WebSocket: Monitoring
         if path == "/ws/monitoring":
             if request.headers.get("Upgrade") != "websocket":
                 return Response.new("Expected Upgrade: websocket", status=426, headers=cors_headers)
 
             pair = WebSocketPair.new()
-            # Most reliable way to access pair in Python Workers
-            try:
-                client = pair[0]
-                server = pair[1]
-            except:
-                client = pair.get(0)
-                server = pair.get(1)
+            # Standard access for Python binding
+            client = pair.get(0)
+            server = pair.get(1)
 
             await server.accept()
+            # Connection accepted. Note: Python Workers keep sockets open but 
+            # cloud-wide broadcast requires Durable Objects.
             return Response.new(None, status=101, web_socket=client)
 
-        return Response.new(json.dumps({"error": "Not Found", "path": path}), status=404, headers=cors_headers)
+        return Response.new(json.dumps({"error": "not found", "path": path}), status=404, headers=cors_headers)
 
     except Exception as e:
-        # Ultimate safety net to prevent 1101
+        # Ultimate fallback to avoid 1101
         return Response.new(
-            json.dumps({"error": "Worker Exception", "details": str(e)}), 
+            json.dumps({"error": "Worker crashed", "details": str(e)}), 
             status=500, 
             headers={**cors_headers, "Content-Type": "application/json"}
         )
